@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Autogen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#0b0e14; --panel:#121723; --ink:#e6e9ef; --muted:#8b93a7; --a:#5aa9ff; --b:#ffa94d; --w:#e6e6f0; --line:#2a3245; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding:18px 24px 6px; }
+  header h1 { margin:0; font-size:20px; font-weight:600; }
+  header p { margin:4px 0 0; color:var(--muted); }
+  main { display:grid; grid-template-columns: 744px; gap:20px; padding:16px 24px 32px; align-items:start; }
+  @media (max-width: 1240px) { main { grid-template-columns: 1fr; } }
+  .stage { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  canvas#c { display:block; background:#070910; border-radius:6px; image-rendering: pixelated; cursor: crosshair; width:720px; height:540px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:10px 0 0; }
+  .row label { color:var(--muted); font-size:13px; }
+  button { background:#1b2232; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 11px; font:inherit; font-size:13px; cursor:pointer; }
+  button:hover { background:#232c40; }
+  button.on { outline:2px solid #fff5; background:#263050; }
+  button.a { border-color: var(--a); } button.b { border-color: var(--w); }
+  input[type=range] { width:90px; vertical-align:middle; }
+  input[type=number] { width:64px; background:#0e1220; color:var(--ink); border:1px solid var(--line); border-radius:4px; padding:3px 6px; font:inherit; font-size:13px; }
+  .stats { display:grid; grid-template-columns: repeat(6, 1fr); gap:8px; margin-top:10px; }
+  .stat { background:#0e1220; border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+  .stat .k { color:var(--muted); font-size:12px; }
+  .stat .v { font-size:17px; font-variant-numeric: tabular-nums; }
+  #spark { display:block; width:100%; height:48px; margin-top:4px; background:#0e1220; border-radius:4px; }
+  .notes { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 20px; max-width:720px; }
+  .notes h2 { font-size:15px; margin:14px 0 6px; }
+  .notes h2:first-child { margin-top:0; }
+  .notes p, .notes li { color:#c9cfdb; }
+  .notes ol, .notes ul { padding-left:20px; }
+  .notes li { margin:4px 0; }
+  .sw { display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:middle; margin-right:4px; }
+  .sa { background:var(--a); } .sb { background:var(--b); } .sw.w { background:var(--w); } .sf { background:#2f7a4a; } .sm { background:#9a5cff; }
+  em { color:var(--ink); font-style: normal; font-weight:600; }
+  .fine { color:var(--muted); font-size:13px; }
+  .legend { color:var(--muted); font-size:13px; margin-top:8px; }
+  table.rules { border-collapse:collapse; width:100%; font-size:13px; margin:6px 0 10px; }
+  table.rules th, table.rules td { border:1px solid var(--line); padding:4px 7px; vertical-align:top; text-align:left; color:#c9cfdb; }
+  table.rules th { color:var(--muted); font-weight:600; background:#0e1220; }
+  table.rules td.grp { background:#0e1220; color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <section class="stage">
+    <canvas id="c" width="720" height="540"></canvas>
+    <div class="legend"><span class="sw sa"></span>catalystA &nbsp; <span class="sw sb"></span>catalystB &nbsp; <span class="sw w"></span>wall &nbsp; <span class="sw sf"></span>substrate &nbsp; <span class="sw sm"></span>monomers</div>
+    <div class="row">
+      <button id="pCat" class="a">Catalysis</button>
+      <button id="pSeed" class="b">Assembly</button>
+      <button id="pBoth">Both</button>
+      <button id="pEmpty">Empty</button>
+    </div>
+    <div class="row">
+      <label>brush</label>
+      <button class="tool on" data-tool="cat">catalysts</button>
+      <button class="tool" data-tool="seed">seed</button>
+      <button class="tool" data-tool="breach">breach</button>
+      <button class="tool" data-tool="erase">erase</button>
+    </div>
+    <div class="row">
+      <button id="play">Pause</button>
+      <button id="stepBtn">Step</button>
+      <label>speed <input id="speed" type="range" min="1" max="20" value="4"> <span id="speedV">4</span></label>
+      <label><input id="showGrid" type="checkbox" checked> grid</label>
+      <label title="ambient substrate">ambient <input id="amb" type="range" min="1" max="12" value="5"> <span id="ambV"></span></label>
+      <label title="wall erosion per cell per step">erosion <input id="erode" type="range" min="0" max="20" value="2"> <span id="erodeV"></span></label>
+      <label title="catalyst decay per step">decay <input id="decay" type="range" min="0" max="20" value="6"> <span id="decayV"></span></label>
+      <label title="catalyst random walk rate">dispersal <input id="move" type="range" min="0" max="10" value="4"> <span id="moveV"></span></label>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">step</div><div class="v" id="gen">0</div></div>
+      <div class="stat"><div class="k">catalysts</div><div class="v" id="cats">0</div></div>
+      <div class="stat"><div class="k">enclosed</div><div class="v" id="encl">0</div></div>
+      <div class="stat"><div class="k">walls</div><div class="v" id="walls">0</div></div>
+      <div class="stat"><div class="k">substrate</div><div class="v" id="food">0</div></div>
+      <div class="stat"><div class="k">monomers</div><div class="v" id="mono">0</div></div>
+      <div class="stat" style="grid-column: span 6"><div class="k">births</div><canvas id="spark" width="696" height="48"></canvas></div>
+    </div>
+  </section>
+
+</main>
+
+<script src="autogen.js"></script>
+<script>
+(() => {
+  const { Autogen } = window.AutogenModel;
+  const W = 120, H = 90, SCALE = 6;
+  const PARAMS = { W, H, seed: (Math.random() * 1e9) | 0, catRate: 0.3, catCost: 0.002, catMove: 0.4, catDecay: 0.0006, partnerMin: 3, wallRate: 1, mEmit: 12, wallTheta: 0.6, wallErode: 0.00002, sDiffuse: 0.5, sRelax: 0.002, sAmb: 0.05 };
+  let A = new Autogen(PARAMS);
+  const CX = 60, CY = 45;
+  const hist = [];
+
+  // ---- presets ----
+  function preset(kind) {
+    A = new Autogen(Object.assign({}, PARAMS, { seed: (Math.random() * 1e9) | 0, catMove: move.value / 10, catDecay: decay.value * 1e-4, wallErode: erode.value * 1e-5, sAmb: amb.value / 100 }));
+    hist.length = 0; A.S.fill(A.p.sAmb);
+    if (kind === 'cat' || kind === 'both') A.placeCatalysts(CX, CY, 5, 0.8);
+    if (kind === "seed" || kind === "both") A.placeSeed(CX, CY - 6);
+    for (const b of document.querySelectorAll('[data-preset]')) b.classList.toggle('on', b.dataset.preset === kind);
+    draw(); updateStats();
+  }
+  document.getElementById('pCat').dataset.preset = 'cat'; document.getElementById('pSeed').dataset.preset = 'seed';
+  document.getElementById('pBoth').dataset.preset = 'both'; document.getElementById('pEmpty').dataset.preset = 'empty';
+  for (const b of document.querySelectorAll('[data-preset]')) b.onclick = () => preset(b.dataset.preset);
+
+  // ---- drawing ----
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  const off = document.createElement('canvas'); off.width = W; off.height = H; const octx = off.getContext('2d');
+  function draw() {
+    const d = img.data, c = A.c, S = A.S, M = A.M;
+    for (let i = 0; i < W * H; i++) {
+      const o = i * 4; const v = c[i]; let r, g, b;
+      if (v === 3) { r = 230; g = 230; b = 240; }
+      else {
+        const m = Math.min(1, M[i] / 0.4); // monomers: purple glow over whatever is there
+        if (v === 1) { r = 90; g = 169; b = 255; } else if (v === 2) { r = 255; g = 169; b = 77; }
+        else { const s = Math.min(1, S[i] / Math.max(1e-6, A.p.sAmb)); r = 7 + 4 * s; g = 9 + 22 * s; b = 16 + 10 * s; }
+        r = r + (170 - r) * m * (v ? 0.45 : 0.9); g = g + (60 - g) * m * (v ? 0.45 : 0.9); b = b + (255 - b) * m * (v ? 0.45 : 0.9);
+      }
+      d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = 255;
+    }
+    octx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(off, 0, 0, cv.width, cv.height);
+    if (showGrid.checked) {
+      ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1; ctx.beginPath();
+      for (let x = 0; x <= W; x++) { ctx.moveTo(x * SCALE + .5, 0); ctx.lineTo(x * SCALE + .5, H * SCALE); }
+      for (let y = 0; y <= H; y++) { ctx.moveTo(0, y * SCALE + .5); ctx.lineTo(W * SCALE, y * SCALE + .5); }
+      ctx.stroke(); ctx.restore();
+    }
+  }
+  const showGrid = document.getElementById('showGrid'); showGrid.onchange = () => draw();
+  const spark = document.getElementById('spark'), sctx = spark.getContext('2d');
+  function drawSpark() {
+    const w = spark.width, h = spark.height; sctx.clearRect(0, 0, w, h);
+    if (!hist.length) return;
+    const max = Math.max(5, ...hist);
+    sctx.strokeStyle = '#8fb6ff'; sctx.lineWidth = 1; sctx.beginPath();
+    for (let i = 0; i < hist.length; i++) { const x = i / (hist.length - 1 || 1) * (w - 2) + 1, y = h - 1 - hist[i] / max * (h - 4); i ? sctx.lineTo(x, y) : sctx.moveTo(x, y); }
+    sctx.stroke();
+  }
+  const genEl = document.getElementById('gen'), catsEl = document.getElementById('cats'), enclEl = document.getElementById('encl'), wallsEl = document.getElementById('walls'), foodEl = document.getElementById('food'), monoEl = document.getElementById('mono');
+  function updateStats() {
+    genEl.textContent = A.t;
+    const k = A.counts(), e = A.enclosure();
+    catsEl.textContent = k.a + k.b; enclEl.textContent = e.inside;
+    wallsEl.textContent = k.w;
+    let s = 0, m = 0; for (let i = 0; i < A.S.length; i++) { s += A.S[i]; m += A.M[i]; } foodEl.textContent = (s / A.S.length / Math.max(1e-6, A.p.sAmb) * 100).toFixed(0) + '%'; monoEl.textContent = m.toFixed(0);
+    drawSpark();
+  }
+
+  // ---- controls ----
+  const speed = document.getElementById('speed'), speedV = document.getElementById('speedV');
+  const erode = document.getElementById('erode'), erodeV = document.getElementById('erodeV');
+  const decay = document.getElementById('decay'), decayV = document.getElementById('decayV');
+  const move = document.getElementById('move'), moveV = document.getElementById('moveV');
+  const amb = document.getElementById('amb'), ambV = document.getElementById('ambV');
+  function applySliders() {
+    A.p.wallErode = erode.value * 1e-5; A.p.catDecay = decay.value * 1e-4; A.p.catMove = move.value / 10; A.p.sAmb = amb.value / 100;
+    erodeV.textContent = (erode.value * 1e-5).toExponential(0); decayV.textContent = (decay.value * 1e-4).toExponential(0); moveV.textContent = (move.value / 10).toFixed(1); ambV.textContent = (amb.value / 100).toFixed(2);
+    speedV.textContent = speed.value;
+  }
+  for (const el of [speed, erode, decay, move, amb]) el.oninput = applySliders;
+  let tool = 'cat';
+  for (const b of document.querySelectorAll('.tool')) b.onclick = () => { tool = b.dataset.tool; for (const o of document.querySelectorAll('.tool')) o.classList.toggle('on', o === b); };
+  let running = true; const playBtn = document.getElementById('play');
+  playBtn.onclick = () => { running = !running; playBtn.textContent = running ? 'Pause' : 'Play'; };
+  document.getElementById('stepBtn').onclick = () => { running = false; playBtn.textContent = 'Play'; tick(1); };
+  let painting = false;
+  function paint(ev) {
+    const r = cv.getBoundingClientRect(); const x = Math.floor((ev.clientX - r.left) / r.width * W), y = Math.floor((ev.clientY - r.top) / r.height * H);
+    if (tool === 'cat') A.placeCatalysts(x, y, 4, 0.8);
+    else if (tool === 'seed') A.placeSeed(x, y);
+    else if (tool === 'breach') A.eraseWalls(x, y, 5);
+    else A.erase(x, y, 4);
+    draw();
+  }
+  cv.onmousedown = ev => { painting = true; paint(ev); };
+  cv.onmousemove = ev => { if (painting && tool !== 'seed') paint(ev); };
+  window.onmouseup = () => painting = false;
+
+  function tick(n) {
+    for (let k = 0; k < n; k++) {
+      A.step();
+      hist.push(A.births); if (hist.length > 600) hist.shift();
+    }
+    draw(); updateStats();
+  }
+  function frame() { if (running) tick(+speed.value); requestAnimationFrame(frame); }
+  applySliders(); preset('both');
+  window.__autogen = { get A() { return A; }, preset, tick, hist };
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
